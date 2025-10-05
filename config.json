@@ -1,0 +1,16 @@
+{
+    "entities": [
+        {"name": "Common Bot", "rarity": "Common", "emoji": "🤖", "power": 10, "desc": "Basic AI drone.", "image_url": "https://via.placeholder.com/128?text=Bot"},
+        {"name": "Ahri Fox", "rarity": "Rare", "emoji": "🦊", "power": 50, "desc": "Nine-tailed charmer.", "image_url": "https://ddragon.leagueoflegends.com/cdn/img/champion/loading/Ahri_0.jpg"},
+        {"name": "Dank Shiba", "rarity": "Epic", "emoji": "🐕", "power": 100, "desc": "Meme lord.", "image_url": "https://via.placeholder.com/128?text=Shiba"},
+        {"name": "Pikachu Warrior", "rarity": "Legendary", "emoji": "⚡", "power": 200, "desc": "Thunderbolt fusion.", "image_url": "https://via.placeholder.com/128?text=Pikachu"},
+        {"name": "Void Empress", "rarity": "Mythic", "emoji": "🌌", "power": 500, "desc": "Ultimate Ahri.", "image_url": "https://media.giphy.com/media/3o7btPCcdNniyf0ArS/giphy.gif"}
+    ],
+    "events": ["double_spawn", "meme_fest", "pvp_tournament"],
+    "default_spawn_rate": 1.0,
+    "official_perks": {"spawn_multiplier": 3.0},
+    "premium_cost": 1000,
+    "catch_cooldown": 30,
+    "pull_cost": 50,
+    "dashboard_secret": "change_me"
+}
