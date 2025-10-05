@@ -1,0 +1,74 @@
+import discord
+from discord.ext import commands, tasks
+import aiosqlite
+import json
+import random
+import asyncio
+import time
+from datetime import datetime, timedelta
+from typing import Optional, Dict, List
+import aiohttp
+from collections import defaultdict
+import requests  # For dashboard webhooks
+import os  # For env vars
+
+# === COLORS FOR EYE-CATCHING EMBEDS ===
+NEON_BLUE = 0x00D4FF
+NEON_PURPLE = 0x8B00FF
+SUCCESS_GREEN = 0x00FF7F
+ERROR_RED = 0xFF4500
+PREMIUM_GOLD = 0xFFD700
+ADMIN_SILVER = 0xC0C0C0
+OFFICIAL_GLOW = 0xFF1493
+DARK_BG = 0x0D1117
+
+# === BOT SETUP ===
+intents = discord.Intents.default()
+intents.message_content = True
+intents.members = True
+bot = commands.Bot(command_prefix='!', intents=intents, help_command=None)
+
+# Env Vars for Secrets (Safe for GitHub – No Hard-Codes)
+OWNER_ID = int(os.getenv('OWNER_ID', '0'))  # Must set in deploy; 0 = invalid
+DISCORD_TOKEN = os.getenv('DISCORD_TOKEN', None)
+DASHBOARD_WEBHOOK_URL = os.getenv('DASHBOARD_WEBHOOK_URL', '')
+
+# Config (Load or default – auto-creates if missing)
+CONFIG_FILE = 'config.json'
+try:
+    with open(CONFIG_FILE, 'r') as f:
+        CONFIG = json.load(f)
+    print(f"✅ Loaded config from {CONFIG_FILE}")
+except (FileNotFoundError, json.JSONDecodeError):
+    CONFIG = {
+        'entities': [
+            {'name': 'Common Bot', 'rarity': 'Common', 'emoji': '🤖', 'power': 10, 'desc': 'Basic AI drone.', 'image_url': 'https://via.placeholder.com/128?text=Bot'},
+            {'name': 'Ahri Fox', 'rarity': 'Rare', 'emoji': '🦊', 'power': 50, 'desc': 'Nine-tailed charmer.', 'image_url': 'https://ddragon.leagueoflegends.com/cdn/img/champion/loading/Ahri_0.jpg'},
+            {'name': 'Dank Shiba', 'rarity': 'Epic', 'emoji': '🐕', 'power': 100, 'desc': 'Meme lord.', 'image_url': 'https://via.placeholder.com/128?text=Shiba'},
+            {'name': 'Pikachu Warrior', 'rarity': 'Legendary', 'emoji': '⚡', 'power': 200, 'desc': 'Thunderbolt fusion.', 'image_url': 'https://via.placeholder.com/128?text=Pikachu'},
+            {'name': 'Void Empress', 'rarity': 'Mythic', 'emoji': '🌌', 'power': 500, 'desc': 'Ultimate Ahri.', 'image_url': 'https://media.giphy.com/media/3o7btPCcdNniyf0ArS/giphy.gif'}
+        ],
+        'events': ['double_spawn', 'meme_fest', 'pvp_tournament'],
+        'default_spawn_rate': 1.0,
+        'official_perks': {'spawn_multiplier': 3.0},
+        'premium_cost': 1000,
+        'catch_cooldown': 30,
+        'pull_cost': 50,
+        'dashboard_secret': 'change_me'  # Change in deploy env if using dashboard
+    }
+    with open(CONFIG_FILE, 'w') as f:
+        json.dump(CONFIG, f, indent=4)
+    print(f"📝 Created default {CONFIG_FILE}")
+
+ENTITIES = CONFIG['entities']
+EVENTS = CONFIG['events']
+
+DB_FILE = 'nexusverse.db'
+rate_limits = defaultdict(list)
+guild_limits = defaultdict(list)
+
+# Startup Token Check (Prevents Run Without Token)
+if DISCORD_TOKEN is None or DISCORD_TOKEN == '':
+    raise ValueError("❌ DISCORD_TOKEN env var required! Set in Railway/Render.")
+if OWNER_ID == 0:
+    print("⚠️ OWNER_ID env var recommended for owner commands.")
