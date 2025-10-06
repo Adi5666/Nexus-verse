@@ -130,7 +130,7 @@ async def init_db():
 
 # === DB HELPERS ===
 async def get_user_data(user_id: int) -> dict:
-    async with aiosqlite.connect(DB_FILE) -> dict:
+    async with aiosqlite.connect(DB_FILE) as db:
         cursor = await db.execute('SELECT * FROM users WHERE user_id = ?', (user_id,))
         row = await cursor.fetchone()
         if row:
