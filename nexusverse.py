@@ -678,7 +678,7 @@ async def battle_command(interaction: discord.Interaction, opponent: discord.Mem
     await interaction.followup.send(embed=embed, content=f"{interaction.user.mention} vs {opponent.mention} – Arena clash!")
 
 # === SOCIAL COMMANDS ===
-@bot.tree.command(name='battle', description='⚔️ PvP Battle – Pit Your Strongest Entity vs User!')
+@bot.tree.command(name='duel', description='⚔️ PvP Battle – Pit Your Strongest Entity vs User!')
 async def battle_command(interaction: discord.Interaction, opponent: discord.Member):
     user_id = interaction.user.id
     opp_id = opponent.id
