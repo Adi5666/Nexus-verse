@@ -407,7 +407,7 @@ async def catch_command(interaction: discord.Interaction):
             description=desc,
             color=color
         )
-                embed.set_image(url="https://media.giphy.com/media/3o7btPCcdNniyf0ArS/giphy.gif")  # Glitch GIF
+        embed.set_image(url="https://media.giphy.com/media/3o7btPCcdNniyf0ArS/giphy.gif")  # Glitch GIF
         pity_bar = "🟢" * data['pity'] + "🔴" * (10 - data['pity'])
         embed.add_field(name="Pity Progress", value=pity_bar, inline=False)
         embed.add_field(name="Tip", value="Premium: +20% success & instant retry! 💎 Or upgrade in /shop.", inline=False)
