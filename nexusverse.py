@@ -811,7 +811,7 @@ async def premium_command(interaction: discord.Interaction, sub: str = "status")
         embed.set_thumbnail(url="https://media.giphy.com/media/3o7btPCcdNniyf0ArS/giphy.gif")  # Glow GIF
         embed.set_footer(text="Premium: The path to Nexus legend. 💎")
         await interaction.response.send_message(embed=embed)
-   elif sub == "buy":
+    elif sub == "buy":
         if data['is_premium']:
             embed = discord.Embed(title="💎 Already Premium!", description="Your glow is active. Extend later?", color=PREMIUM_GOLD)
             await interaction.response.send_message(embed=embed)
@@ -830,7 +830,7 @@ async def premium_command(interaction: discord.Interaction, sub: str = "status")
         embed.set_image(url="https://media.giphy.com/media/26ufnwz3wDUli7GU0/giphy.gif")  # Glow/upgrade GIF
         embed.set_footer(text="Resell premium access in trades for profit! | Grind smarter, not harder.")
         await interaction.response.send_message(embed=embed, content=f"{interaction.user.mention} – Welcome to the elite! ✨")
-    elif sub == "grant":
+   elif sub == "grant":
         if not (interaction.user.id == OWNER_ID or interaction.user.guild_permissions.administrator):
             embed = discord.Embed(title="🚫 Access Denied", description="Only owners/admins can grant premium!", color=ERROR_RED)
             await interaction.response.send_message(embed=embed, ephemeral=True)
