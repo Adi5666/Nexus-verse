@@ -965,17 +965,34 @@ async def fuse_command(interaction: discord.Interaction, entity1: str, entity2: 
     embed.add_field(name="Tip", value="Fuse more for mythics. Premium unlocks golden variants!", inline=False)
     embed.set_footer(text="Your collection evolves! /profile to see.")
     await interaction.response.send_message(embed=embed, content=f"{interaction.user.mention} – Fusion complete! {new_entity['emoji']}")
-# === FINAL BOT RUN (Add This at the Very End of the File) ===
+# === FINAL BOT RUN (Add This at the Very End of the File)
+async def sync_commands():
+    """Sync slash commands – Clear old ones first to avoid duplicates."""
+    try:
+        # CRITICAL FIX: Clear all global commands before re-adding
+        bot.tree.clear_commands(guild=None)  # Global clear (no guild param for all servers)
+        print("🧹 Cleared old slash commands.")
+        
+        # Add all your commands here (or they auto-register via decorators)
+        # If using manual add_command, do it after clear
+        # e.g., bot.tree.add_command(battle_command)
+        # bot.tree.add_command(catch_command)
+        # ... (other commands)
+        
+        # Sync to Discord API
+        synced = await bot.tree.sync(guild=None)  # Global sync (or guild=discord.Object(id=YOUR_GUILD_ID) for testing)
+        print(f"✅ Synced {len(synced)} commands globally.")
+        
+    except Exception as e:
+        print(f"❌ Sync Error: {e}")
+
+# In on_ready event (search for @bot.event async def on_ready():)
 @bot.event
 async def on_ready():
-    await init_db()  # Ensure DB ready
-    print(f'🌌 NexusVerse Online! Owner: <@{OWNER_ID}> | Guilds: {len(bot.guilds)} | Entities: {len(ENTITIES)}')
-    try:
-        synced = await bot.tree.sync()
-        print(f'🔮 Synced {len(synced)} slash commands globally.')
-    except Exception as e:
-        print(f'⚠️ Command Sync Error: {e}')
-
+    print(f'🌌 NexusVerse Online! Owner: <@{OWNER_ID}> | Guilds: {len(bot.guilds)}')
+    if not hasattr(bot, 'synced'):  # Run sync only once per startup
+        bot.synced = True
+        await sync_commands()  # Call sync here
 if __name__ == '__main__':
     if DISCORD_TOKEN is None:
         print("❌ DISCORD_TOKEN not set! Add to env vars in Railway/Render.")
