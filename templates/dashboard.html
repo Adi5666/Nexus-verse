@@ -105,10 +105,71 @@
         <button type="submit"><i class="fas fa-play"></i> Launch Event</button>
     </form>
     
+    <form method="POST" action="/ban_user">
+        <h2><i class="fas fa-ban"></i> 🔒 Ban User (Global)</h2>
+        <div class="form-row">
+            <input type="number" name="user_id" placeholder="User  ID" required aria-label="User  ID">
+            <input type="text" name="reason" placeholder="Reason (e.g., Spam)" required aria-label="Ban Reason">
+        </div>
+        <button type="submit"><i class="fas fa-lock"></i> Execute Ban</button>
+    </form>
+    
+    <form method="POST" action="/unban_user">
+        <h2><i class="fas fa-unlock-alt"></i> 🔓 Unban User</h2>
+        <div class="form-row">
+            <input type="number" name="user_id" placeholder="User  ID" required aria-label="User  ID">
+        </div>
+        <button type="submit"><i class="fas fa-check"></i> Lift Ban</button>
+    </form>
+    
     <div class="nav">
+        <a href="/view_audits"><i class="fas fa-file-alt"></i> View Audits</a>
+        <a href="/top_users"><i class="fas fa-trophy"></i> Top Users</a>
         <a href="/logout"><i class="fas fa-sign-out-alt"></i> Logout</a>
     </div>
     
     {% with messages = get_flashed_messages() %}
         {% if messages %}
-            {% for message in messages
+            {% for message in messages %}
+                <div class="flash {{ 'error' if 'error' in message.lower() or 'denied' in message.lower() else '' }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    
+    <script>
+        // Render Top Users Chart (Neon Cyberpunk Style)
+        const ctx = document.getElementById('topChart').getContext('2d');
+        const chartData = {{ chart_data | safe }};
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: chartData.labels,
+                datasets: [{
+                    label: 'Levels',
+                    data: chartData.levels,
+                    borderColor: '#00D4FF',
+                    backgroundColor: 'rgba(0, 212, 255, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }, {
+                    label: 'Credits',
+                    data: chartData.credits,
+                    borderColor: '#FFD700',
+                    backgroundColor: 'rgba(255, 215, 0, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: { y: { beginAtZero: true, grid: { color: '#8B00FF' }, ticks: { color: '#00D4FF' } }, x: { grid: { color: '#8B00FF' }, ticks: { color: '#00D4FF' } } },
+                plugins: { legend: { labels: { color: '#00D4FF', font: { family: 'Orbitron' } } } },
+                animation: { duration: 2000, easing: 'easeInOutQuart' }
+            }
+        });
+        
+        // Auto-refresh stats every 30s (optional live feel)
+        setInterval(() => location.reload(), 30000);
+    </script>
+</body>
+</html>
