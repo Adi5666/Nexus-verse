@@ -1,140 +1,191 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, session
-from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user
-import aiosqlite
+from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify
+import sqlite3
 import json
 import os
 from datetime import datetime, timedelta
-import requests  # For webhook sends
-import asyncio
-from functools import wraps
+import requests
 
 app = Flask(__name__)
-app.secret_key = os.getenv('DASHBOARD_SECRET', 'change_me')  # Env var for security
-login_manager = LoginManager(app)
-login_manager.login_view = 'login'
-
-# Load shared config/DB
+app.secret_key = os.getenv('DASHBOARD_SECRET', 'change_me')  # Strong secret in env!
 CONFIG_FILE = 'config.json'
 try:
     with open(CONFIG_FILE, 'r') as f:
         CONFIG = json.load(f)
-except:
-    CONFIG = {'dashboard_secret': 'change_me', 'entities': []}  # Fallback
+except FileNotFoundError:
+    CONFIG = {'dashboard_secret': 'change_me', 'entities': []}
 DB_FILE = 'nexusverse.db'
 DASHBOARD_WEBHOOK_URL = os.getenv('DASHBOARD_WEBHOOK_URL', '')
 
-class AdminUser(UserMixin):
-    def __init__(self, id):
-        self.id = id
-
-@login_manager.user_loader
-def load_user(user_id):
-    return AdminUser(user_id) if user_id == 'admin' else None
-
-def require_secret(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'logged_in' not in session:
-            return redirect(url_for('login'))
-        return f(*args, **kwargs)
-    return decorated_function
+def get_db_connection():
+    conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row  # Dict-like rows
+    return conn
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        password = request.form['password']
-        if password == CONFIG['dashboard_secret']:  # Simple secret check
+        if request.form['password'] == CONFIG['dashboard_secret']:
             session['logged_in'] = True
-            flash('Logged in successfully!')
+            flash('Access Granted! Welcome to the Nexus Control Center. 🌌')
             return redirect(url_for('dashboard'))
-        flash('Invalid secret!')
-    return render_template('login.html')  # Create templates/login.html below
+        flash('Access Denied – Invalid Secret. Try Again.')
+    return render_template('login.html')
 
 @app.route('/logout')
-@login_required
 def logout():
     session.pop('logged_in', None)
-    flash('Logged out!')
+    flash('Logged Out Securely. The Nexus Awaits Your Return.')
     return redirect(url_for('login'))
 
-@app.route('/')
-@login_required
+@app.route('/', methods=['GET'])
 def dashboard():
-    return render_template('dashboard.html')  # Main UI
+    if 'logged_in' not in session:
+        return redirect(url_for('login'))
+    
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    # Stats
+    cur.execute('SELECT COUNT(*) FROM users')
+    user_count = cur.fetchone()[0]
+    cur.execute('SELECT COUNT(*) FROM users WHERE is_premium = 1')
+    premium_count = cur.fetchone()[0]
+    cur.execute('SELECT event_type FROM global_events WHERE end_time > ? LIMIT 1', (datetime.now().isoformat(),))
+    row = cur.fetchone()
+    active_event = row[0] if row else "None"
+    
+    # Top 5 Users (for chart data)
+    cur.execute('SELECT user_id, level, credits FROM users ORDER BY level DESC LIMIT 5')
+    top_users = cur.fetchall()
+    
+    # Premium Today (simple count of recent grants – expand with timestamp if audits have it)
+    premium_today = premium_count  # Placeholder; add query for today if DB updated
+    
+    conn.close()
+    
+    # Chart Data (JSON for Chart.js)
+    chart_data = {
+        'labels': [row['user_id'] for row in top_users],
+        'levels': [row['level'] for row in top_users],
+        'credits': [row['credits'] for row in top_users]
+    }
+    
+    return render_template('dashboard.html', 
+                          user_count=user_count, 
+                          premium_count=premium_count, 
+                          active_event=active_event, 
+                          premium_today=premium_today,
+                          chart_data=json.dumps(chart_data))
 
 @app.route('/grant_premium', methods=['POST'])
-@login_required
 def grant_premium_web():
+    if 'logged_in' not in session:
+        return redirect(url_for('login'))
     user_id = int(request.form['user_id'])
     duration = int(request.form.get('duration', 1))
     end_time = datetime.now() + timedelta(days=30 * duration)
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(update_user_data_web(user_id, premium_until=end_time))  # Shared helper
-    loop.close()
-    # Send webhook notification
-    if DASHBOARD_WEBHOOK_URL:
-        requests.post(DASHBOARD_WEBHOOK_URL, json={'content': f'💎 Premium granted to user {user_id} for {duration} months via dashboard!'})
-    flash(f'Premium granted to {user_id}!')
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute('UPDATE users SET is_premium = 1, premium_until = ? WHERE user_id = ?', (end_time.isoformat(), user_id))
+    affected = cur.rowcount
+    conn.commit()
+    conn.close()
+    if affected > 0:
+        flash(f'Premium Granted! User {user_id} now has {duration} months of elite access. 💎')
+        if DASHBOARD_WEBHOOK_URL:
+            requests.post(DASHBOARD_WEBHOOK_URL, json={'content': f'💎 Dashboard: Premium granted to {user_id} for {duration} months! Glow activated.'})
+    else:
+        flash('User  Not Found – Check ID and Try Again.')
     return redirect(url_for('dashboard'))
 
 @app.route('/start_event', methods=['POST'])
-@login_required
 def start_event_web():
+    if 'logged_in' not in session:
+        return redirect(url_for('login'))
     event_type = request.form['event_type']
     duration = int(request.form.get('duration', 24))
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(start_global_event_web(event_type, duration))
-    loop.close()
-    if DASHBOARD_WEBHOOK_URL:
-        requests.post(DASHBOARD_WEBHOOK_URL, json={'content': f'🌌 Global event "{event_type}" started for {duration}h via dashboard!'})
-    flash(f'Event "{event_type}" started!')
-    return redirect(url_for('dashboard'))
-
-@app.route('/view_audits')
-@login_required
-def view_audits():
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    audits = loop.run_until_complete(get_audits_web())
-    loop.close()
-    return render_template('audits.html', audits=audits)
-
-# Shared DB Helpers (Non-Async for Flask; use sync sqlite3 if needed, but aiosqlite with loop)
-async def update_user_data_web(user_id: int, **kwargs):
-    # Reuse from bot (copy get_user_data logic, but sync for simplicity)
-    import sqlite3
-    conn = sqlite3.connect(DB_FILE)
+    end_time = datetime.now() + timedelta(hours=duration)
+    conn = get_db_connection()
     cur = conn.cursor()
-    # Similar to update_user_data, but sync
-    set_parts = ', '.join([f"{k}=?" for k in kwargs])
-    values = list(kwargs.values()) + [user_id]
-    if 'premium_until' in kwargs:
-        values[values.index(kwargs['premium_until'])] = kwargs['premium_until'].isoformat()
-    cur.execute(f'UPDATE users SET {set_parts} WHERE user_id=?', values)
-    conn.commit()
-    conn.close()
-
-async def start_global_event_web(event_type: str, duration_hours: int = 24):
-    import sqlite3
-    conn = sqlite3.connect(DB_FILE)
-    cur = conn.cursor()
-    end_time = datetime.now() + timedelta(hours=duration_hours)
     cur.execute('DELETE FROM global_events')
     cur.execute('INSERT INTO global_events (event_type, start_time, end_time) VALUES (?, ?, ?)',
                 (event_type, datetime.now().isoformat(), end_time.isoformat()))
     conn.commit()
     conn.close()
+    flash(f'Event Launched! "{event_type}" active for {duration} hours. Nexus buzzing! 🌌')
+    if DASHBOARD_WEBHOOK_URL:
+        requests.post(DASHBOARD_WEBHOOK_URL, json={'content': f'🌌 Dashboard: Global event "{event_type}" started for {duration}h! All servers notified.'})
+    return redirect(url_for('dashboard'))
 
-async def get_audits_web():
-    import sqlite3
-    conn = sqlite3.connect(DB_FILE)
+@app.route('/ban_user', methods=['POST'])
+def ban_user_web():
+    if 'logged_in' not in session:
+        return redirect(url_for('login'))
+    user_id = int(request.form['user_id'])
+    reason = request.form.get('reason', 'Dashboard Ban')
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute('INSERT OR REPLACE INTO bans (user_id, reason, issuer, timestamp, guild_id) VALUES (?, ?, ?, ?, ?)',
+                (user_id, reason, 'Dashboard Admin', datetime.now().isoformat(), None))  # Global ban
+    conn.commit()
+    conn.close()
+    flash(f'User {user_id} Banned Globally! Reason: {reason}. Enforcement active.')
+    if DASHBOARD_WEBHOOK_URL:
+        requests.post(DASHBOARD_WEBHOOK_URL, json={'content': f'🔒 Dashboard: User {user_id} banned for "{reason}".'})
+    return redirect(url_for('dashboard'))
+
+@app.route('/unban_user', methods=['POST'])
+def unban_user_web():
+    if 'logged_in' not in session:
+        return redirect(url_for('login'))
+    user_id = int(request.form['user_id'])
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute('DELETE FROM bans WHERE user_id = ?', (user_id,))
+    affected = cur.rowcount
+    conn.commit()
+    conn.close()
+    if affected > 0:
+        flash(f'User {user_id} Unbanned! Mercy granted.')
+        if DASHBOARD_WEBHOOK_URL:
+            requests.post(DASHBOARD_WEBHOOK_URL, json={'content': f'🔓 Dashboard: User {user_id} unbanned.'})
+    else:
+        flash('User  Not Banned – No Action Taken.')
+    return redirect(url_for('dashboard'))
+
+@app.route('/view_audits')
+def view_audits():
+    if 'logged_in' not in session:
+        return redirect(url_for('login'))
+    conn = get_db_connection()
     cur = conn.cursor()
     cur.execute('SELECT * FROM audits ORDER BY timestamp DESC LIMIT 50')
-    rows = cur.fetchall()
+    audits = [dict(row) for row in cur.fetchall()]  # Convert to dict for template
     conn.close()
-    return [{'id': r[0], 'action': r[1], 'issuer': r[2], 'target': r[3], 'guild': r[4], 'timestamp': r[5]} for r in rows]
+    return render_template('audits.html', audits=audits)
+
+@app.route('/export_audits')
+def export_audits():
+    if 'logged_in' not in session:
+        return redirect(url_for('login'))
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute('SELECT * FROM audits ORDER BY timestamp DESC')
+    audits = [dict(row) for row in cur.fetchall()]
+    conn.close()
+    return jsonify(audits)  # JSON download via JS in template
+
+@app.route('/top_users')
+def top_users():
+    if 'logged_in' not in session:
+        return redirect(url_for('login'))
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute('SELECT user_id, level, credits, is_premium FROM users ORDER BY level DESC LIMIT 10')
+    users = [dict(row) for row in cur.fetchall()]
+    conn.close()
+    return render_template('top_users.html', users=users)  # Add this template if wanted
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=False)
