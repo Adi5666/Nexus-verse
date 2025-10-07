@@ -965,36 +965,58 @@ async def fuse_command(interaction: discord.Interaction, entity1: str, entity2: 
     embed.add_field(name="Tip", value="Fuse more for mythics. Premium unlocks golden variants!", inline=False)
     embed.set_footer(text="Your collection evolves! /profile to see.")
     await interaction.response.send_message(embed=embed, content=f"{interaction.user.mention} – Fusion complete! {new_entity['emoji']}")
-# === FINAL BOT RUN (Add This at the Very End of the File)
-async def sync_commands():
-    """Sync slash commands – Clear old ones first to avoid duplicates."""
-    try:
-        # CRITICAL FIX: Clear all global commands before re-adding
-        bot.tree.clear_commands(guild=None)  # Global clear (no guild param for all servers)
-        print("🧹 Cleared old slash commands.")
-        
-        # Add all your commands here (or they auto-register via decorators)
-        # If using manual add_command, do it after clear
-        # e.g., bot.tree.add_command(battle_command)
-        # bot.tree.add_command(catch_command)
-        # ... (other commands)
-        
-        # Sync to Discord API
-        synced = await bot.tree.sync(guild=None)  # Global sync (or guild=discord.Object(id=YOUR_GUILD_ID) for testing)
-        print(f"✅ Synced {len(synced)} commands globally.")
-        
-    except Exception as e:
-        print(f"❌ Sync Error: {e}")
-
-# In on_ready event (search for @bot.event async def on_ready():)
+# Events & Error Handlers (Place after all functions & sync_commands())
 @bot.event
 async def on_ready():
+    """Bot startup event: Init DB, sync commands, print status."""
     print(f'🌌 NexusVerse Online! Owner: <@{OWNER_ID}> | Guilds: {len(bot.guilds)}')
-    if not hasattr(bot, 'synced'):  # Run sync only once per startup
+    await init_db()  # Initialize DB tables (creates nexusverse.db if needed)
+    if not hasattr(bot, 'synced'):  # Run sync only once (avoids duplicates on reconnect)
         bot.synced = True
-        await sync_commands()  # Call sync here
+        print("🔄 Triggering sync_commands() from on_ready...")
+        await sync_commands()  # <-- Calls your manual command adds + sync (shows ✅ Added /help etc.)
+        print("🔮 Bot fully ready – All commands synced! Type /help in Discord to test.")
+    else:
+        print("🔄 Bot reconnected – Commands already synced (no re-sync).")
+
+@bot.event
+async def on_command_error(ctx, error):
+    """Handle errors for prefix commands (e.g., !help)."""
+    if isinstance(error, commands.CommandNotFound):
+        return  # Ignore unknown prefix commands
+    print(f"❌ Prefix command error in {ctx.guild or 'DM'}: {type(error).__name__}: {error}")
+    if ctx.guild:  # Send error to user if in server
+        await ctx.send("❌ An error occurred with that command. Check console for details.", delete_after=5)
+
+@bot.event
+async def on_app_command_error(interaction: discord.Interaction, error):
+    """Handle errors for slash commands (e.g., /profile DB fail)."""
+    print(f"❌ Slash command error in {interaction.guild or 'DM'} for /{(interaction.data.get('name', 'unknown'))}: {type(error).__name__}: {error}")
+    try:
+        if not interaction.response.is_done():
+            await interaction.response.send_message("❌ An error occurred. Try again or contact owner!", ephemeral=True)
+    except:
+        pass  # If response already sent, ignore
+
+# Run the Bot (Final block – if __name__ == '__main__')
 if __name__ == '__main__':
-    if DISCORD_TOKEN is None:
-        print("❌ DISCORD_TOKEN not set! Add to env vars in Railway/Render.")
-        exit(1)
-    asyncio.run(bot.start(DISCORD_TOKEN))  # Use asyncio.run for modern discord.py
+    print("🚀 Launching bot.run() with token...")
+    try:
+        bot.run(DISCORD_TOKEN)
+    except discord.LoginFailure:
+        print("❌ Login failed: Invalid or expired DISCORD_TOKEN.")
+        print("Fix: Developer Portal > Your App > Bot > Regenerate Secret > Copy full token (starts with 'MTEx...').")
+        print("Update: export DISCORD_TOKEN='new_token' (no extra spaces/quotes).")
+    except discord.HTTPException as e:
+        print(f"❌ HTTP/Discord API error (e.g., rate limit, bot not in server, or permissions): {e}")
+        print("Fix: Invite bot again (OAuth2: bot + applications.commands scopes). Check guilds in on_ready.")
+    except discord.Forbidden as e:
+        print(f"❌ Permissions error (bot lacks access): {e}")
+        print("Fix: Re-invite bot with full permissions (Send Messages, Embed Links, Use Slash Commands).")
+    except Exception as e:
+        print(f"❌ Unexpected startup error: {type(e).__name__}: {e}")
+        print("Full traceback below – Check syntax, imports, or line numbers:")
+        import traceback
+        traceback.print_exc()  # Prints full error stack for debug
+    finally:
+        print("🏁 Bot process ended. (Restart with python nexusverse.py)")
