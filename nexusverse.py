@@ -1020,3 +1020,41 @@ if __name__ == '__main__':
         traceback.print_exc()  # Prints full error stack for debug
     finally:
         print("🏁 Bot process ended. (Restart with python nexusverse.py)")
+@bot.event
+async def on_ready():
+    """Bot startup event: Init DB, sync commands, print status."""
+    print(f'🚀 Initializing NexusVerse...')  # Debug start
+    await init_db()  # Create/setup DB tables (users, guilds, etc.)
+    print(f'✅ DB initialized: {DB_FILE} ready with users/guilds/bans tables.')
+    
+    # Bot status print
+    print(f'🌌 NexusVerse Online! Owner: <@{OWNER_ID}> | Guilds: {len(bot.guilds)}')
+    if bot.guilds:
+        print(f'📋 Joined guilds: {[g.name for g in bot.guilds]}')  # List for debug
+    
+    # Sync slash commands (auto for @bot.tree.command decorators)
+    if not hasattr(bot, 'synced'):  # One-time sync (avoids duplicates on reconnect)
+        bot.synced = True
+        try:
+            # Optional: Guild sync for instant testing (set your server ID; None for global)
+            GUILD_ID = None  # e.g., 123456789012345678 – Get from Discord (Right-click server > Copy ID)
+            if GUILD_ID:
+                synced = await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
+                print(f'🔮 Synced {len(synced)} commands to guild {GUILD_ID} (instant visibility).')
+            else:
+                synced = await bot.tree.sync(guild=None)  # Global sync (1-60min delay)
+                print(f'🔮 Synced {len(synced)} commands globally (wait 1-60min for / commands).')
+            
+            # List synced commands for debug
+            print(f'📝 Synced commands: {[cmd.name for cmd in bot.tree.get_commands()]}')
+        except Exception as e:
+            print(f'⚠️ Sync Error: {e} – Check: app_commands import, no duplicate decorators, bot permissions (applications.commands scope).')
+            import traceback
+            traceback.print_exc()  # Full error lines
+    else:
+        print("🔄 Bot reconnected – Commands already synced (no re-sync).")
+    
+    # Optional: Start looped tasks (e.g., global events check every hour)
+    # example_task.start()  # Uncomment if you add @tasks.loop later
+    
+    print("🔮 NexusVerse fully ready! Test with /help in Discord.")  # Final confirmation
