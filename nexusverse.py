@@ -811,7 +811,7 @@ async def premium_command(interaction: discord.Interaction, sub: str = "status")
         embed.set_thumbnail(url="https://media.giphy.com/media/3o7btPCcdNniyf0ArS/giphy.gif")  # Glow GIF
         embed.set_footer(text="Premium: The path to Nexus legend. 💎")
         await interaction.response.send_message(embed=embed)
-       elif sub == "buy":
+   elif sub == "buy":
         if data['is_premium']:
             embed = discord.Embed(title="💎 Already Premium!", description="Your glow is active. Extend later?", color=PREMIUM_GOLD)
             await interaction.response.send_message(embed=embed)
