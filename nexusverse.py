@@ -81,9 +81,9 @@ async def init_db():
                 credits INTEGER DEFAULT 100,
                 entities TEXT DEFAULT '[]',
                 level INTEGER DEFAULT 1,
-                pity_count INTEGER DEFAULT 0,
+                pity INTEGER DEFAULT 0,
                 premium_until TEXT DEFAULT NULL,
-                daily_streak INTEGER DEFAULT 0,
+                streak INTEGER DEFAULT 0,
                 last_daily TEXT DEFAULT NULL,
                 is_official_member BOOLEAN DEFAULT FALSE
             )
