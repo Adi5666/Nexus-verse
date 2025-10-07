@@ -852,7 +852,119 @@ async def premium_command(interaction: discord.Interaction, sub: str = "status")
     else:
         embed = discord.Embed(title="❌ Invalid Sub", description="Use 'status', 'buy', or 'grant' (admin).", color=ERROR_RED)
         await interaction.response.send_message(embed=embed)
+# === OWNER COMMANDS (God-Mode: Only for OWNER_ID – Ban, Stats, Shutdown) ===
+@bot.tree.command(name='owner', description='👑 Owner Controls (Ban/Stats/Shutdown – OWNER ONLY)')
+async def owner_command(interaction: discord.Interaction, sub: str = "stats", target: Optional[discord.Member] = None, reason: Optional[str] = None):
+    if interaction.user.id != OWNER_ID:
+        embed = discord.Embed(title="🚫 Unauthorized", description="Owner powers reserved for <@" + str(OWNER_ID) + ">.", color=ERROR_RED)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+        return
+    guild_id = interaction.guild.id if interaction.guild else None
+    
+    if sub == "stats":
+        async with aiosqlite.connect(DB_FILE) as db:
+            cursor = await db.execute('SELECT COUNT(*) FROM users')
+            user_count = (await cursor.fetchone())[0]
+            cursor = await db.execute('SELECT COUNT(*) FROM guilds')
+            guild_count = (await cursor.fetchone())[0]
+            cursor = await db.execute('SELECT event_type FROM global_events WHERE end_time > ? LIMIT 1', (datetime.now().isoformat(),))
+            row = await cursor.fetchone()
+            active_event = row[0] if row else "None"
+        premium_count = sum(1 for uid in await get_all_users() if (await get_user_data(uid))['is_premium'])
+        embed = discord.Embed(title="👑 NEXUS EMPIRE STATS", description=f"**Users:** {user_count}\n**Guilds:** {guild_count}\n**Active Event:** {active_event}\n**Premium Active:** {premium_count}\n**Uptime:** {datetime.now().strftime('%Y-%m-%d %H:%M')}", color=ADMIN_SILVER)
+        embed.set_footer(text="Your domain thrives! Use /owner ban for control.")
+        await interaction.response.send_message(embed=embed)
+    
+    elif sub == "ban":
+        if not target or not reason:
+            embed = discord.Embed(title="❌ Missing Args", description="Use /owner ban @user <reason> (global/server).", color=ERROR_RED)
+            await interaction.response.send_message(embed=embed)
+            return
+        await ban_user(target.id, reason, OWNER_ID, guild_id)
+        await log_audit("owner_ban", OWNER_ID, target.id, guild_id)
+        embed = discord.Embed(title="🔒 GLOBAL BAN EXECUTED", description=f"{target.mention} exiled for: {reason}\nEnforced across Nexus. Messages deleted, commands blocked.", color=ERROR_RED)
+        embed.add_field(name="Unban", value="/owner unban @user", inline=True)
+        embed.set_thumbnail(url="https://media.giphy.com/media/26ufnwz3wDUli7GU0/giphy.gif")
+        await interaction.response.send_message(embed=embed)
+        try:
+            await target.send(embed=embed)
+        except:
+            pass
+    
+    elif sub == "unban":
+        if not target:
+            embed = discord.Embed(title="❌ Missing Target", description="Use /owner unban @user.", color=ERROR_RED)
+            await interaction.response.send_message(embed=embed)
+            return
+        await unban_user(target.id, guild_id)
+        await log_audit("owner_unban", OWNER_ID, target.id, guild_id)
+        embed = discord.Embed(title="🔓 BAN LIFTED", description=f"{target.mention} reinstated in the Nexus.\n*Mercy shown – rebuild wisely.*", color=SUCCESS_GREEN)
+        await interaction.response.send_message(embed=embed)
+        try:
+            await target.send(embed=embed)
+        except:
+            pass
+    
+    elif sub == "shutdown":
+        embed = discord.Embed(title="👑 EMPIRE SHUTDOWN", description="NexusVerse powering down gracefully. Restart via deploy.", color=DARK_BG)
+        await interaction.response.send_message(embed=embed)
+        await log_audit("owner_shutdown", OWNER_ID)
+        await bot.close()
+    
+    else:
+        embed = discord.Embed(title="❌ Invalid Sub", description="Use 'stats', 'ban @user reason', 'unban @user', 'shutdown'.", color=ERROR_RED)
+        await interaction.response.send_message(embed=embed)
 
+# Helper for owner stats
+async def get_all_users():
+    async with aiosqlite.connect(DB_FILE) as db:
+        cursor = await db.execute('SELECT user_id FROM users')
+        return [row[0] for row in await cursor.fetchall()]
+
+# === EXTRA: ENTITY FUSION (Combine Two for Upgraded – Premium Discount) ===
+@bot.tree.command(name='fuse', description='🔬 Fuse Two Entities – Create Stronger Hybrid! (e.g., /fuse Ahri Fox Common Bot)')
+async def fuse_command(interaction: discord.Interaction, entity1: str, entity2: str):
+    user_id = interaction.user.id
+    data = await get_user_data(user_id)
+    if len(data['entities']) < 2:
+        embed = discord.Embed(title="❌ Need Two Entities", description="Collect more with /catch! Fuse commons to rares.", color=ERROR_RED)
+        await interaction.response.send_message(embed=embed)
+        return
+    e1 = next((e for e in data['entities'] if e['name'].lower() == entity1.lower()), None)
+    e2 = next((e for e in data['entities'] if e['name'].lower() == entity2.lower() and e != e1), None)
+    if not e1 or not e2:
+        embed = discord.Embed(title="❌ Entities Not Found", description="Check /profile for owned names.", color=ERROR_RED)
+        await interaction.response.send_message(embed=embed)
+        return
+    
+    cost = (e1['power'] + e2['power']) // 2 * (0.8 if data['is_premium'] else 1)
+    if data['credits'] < cost:
+        embed = discord.Embed(title="⚠️ Insufficient QC", description=f"Fusion costs {cost} QC. /quest to farm!", color=ERROR_RED)
+        await interaction.response.send_message(embed=embed)
+        return
+    
+    new_power = (e1['power'] + e2['power']) * 1.5
+    new_rarity = max(['Common', 'Rare', 'Epic', 'Legendary', 'Mythic'].index(e1['rarity']), ['Common', 'Rare', 'Epic', 'Legendary', 'Mythic'].index(e2['rarity']))
+    new_rarity = ['Common', 'Rare', 'Epic', 'Legendary', 'Mythic'][new_rarity]
+    if new_rarity == 'Common': new_rarity = 'Rare'
+    new_name = f"{e1['name']} x {e2['name']}"
+    new_entity = {'name': new_name, 'rarity': new_rarity, 'emoji': e1['emoji'], 'power': int(new_power), 'desc': f"Hybrid of {e1['desc']} & {e2['desc']}", 'image_url': e1['image_url']}
+    
+    data['entities'].remove(e1)
+    data['entities'].remove(e2)
+    data['entities'].append(new_entity)
+    data['credits'] -= cost
+    await update_user_data(user_id, entities=data['entities'], credits=data['credits'])
+    await log_audit("fuse", user_id, guild_id=interaction.guild.id if interaction.guild else None)
+    
+    color = PREMIUM_GOLD if data['is_premium'] else SUCCESS_GREEN
+    embed = discord.Embed(title="🔬 FUSION SUCCESS – NEW ENTITY BORN!", description=f"**{new_name}** forged! *{new_entity['desc']}*\nRarity: {new_rarity} | Power: {new_power} (+50% bonus)\nCost: {cost} QC", color=color)
+    embed.set_thumbnail(url=new_entity['image_url'])
+    if data['is_premium']:
+        embed.add_field(name="Premium Discount", value="20% off fusions! 💎", inline=True)
+    embed.add_field(name="Tip", value="Fuse more for mythics. Premium unlocks golden variants!", inline=False)
+    embed.set_footer(text="Your collection evolves! /profile to see.")
+    await interaction.response.send_message(embed=embed, content=f"{interaction.user.mention} – Fusion complete! {new_entity['emoji']}")
 # === FINAL BOT RUN (Add This at the Very End of the File) ===
 @bot.event
 async def on_ready():
