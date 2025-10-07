@@ -245,6 +245,22 @@ async def start_global_event(event_type: str, duration_hours: int = 24):
             await channel.send(embed=embed)
 
 async def get_current_spawn_rate(guild_id: int, user_id: int) -> float:
+    guild_data = await get_guild_data(guild_id)
+    user_data = await get_user_data(user_id)
+    rate = guild_data['spawn_multiplier'] * (2 if user_data['is_premium'] else 1)
+    event = await get_global_event()
+    if event == 'double_spawn':
+        rate *= 2
+    return rate
+
+def rate_limit_check(key: int, limit: int = 5, window: int = 60) -> bool:
+    now = time.time()
+    rate_limits[key] = [t for t in rate_limits[key] if now - t < window]
+    if len(rate_limits[key]) >= limit:
+        return False
+    rate_limits[key].append(now)
+    return True
+
 # === BOT EVENTS ===
 @bot.event
 async def on_ready():
