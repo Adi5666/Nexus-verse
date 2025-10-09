@@ -968,93 +968,88 @@ async def fuse_command(interaction: discord.Interaction, entity1: str, entity2: 
 # Events & Error Handlers (Place after all functions & sync_commands())
 @bot.event
 async def on_ready():
-    """Bot startup event: Init DB, sync commands, print status."""
-    print(f'🌌 NexusVerse Online! Owner: <@{OWNER_ID}> | Guilds: {len(bot.guilds)}')
-    await init_db()  # Initialize DB tables (creates nexusverse.db if needed)
-    if not hasattr(bot, 'synced'):  # Run sync only once (avoids duplicates on reconnect)
+    """Bot startup event: Initialize DB, sync slash commands, and show status."""
+    print("🚀 Initializing NexusVerse...")
+
+    # --- Initialize the database ---
+    await init_db()
+    print(f"✅ Database initialized: {DB_FILE} ready with tables for users/guilds/bans.")
+
+    # --- Basic bot info ---
+    print(f"🌌 NexusVerse Online! Owner: <@{OWNER_ID}> | Guilds: {len(bot.guilds)}")
+    if bot.guilds:
+        print(f"📋 Joined guilds: {[g.name for g in bot.guilds]}")
+
+    # --- Sync slash commands ---
+    if not hasattr(bot, "synced"):
         bot.synced = True
-        print("🔄 Triggering sync_commands() from on_ready...")
-        await sync_commands()  # <-- Calls your manual command adds + sync (shows ✅ Added /help etc.)
-        print("🔮 Bot fully ready – All commands synced! Type /help in Discord to test.")
+        try:
+            GUILD_ID = None  # Optional: Replace with your test guild ID for instant sync
+            if GUILD_ID:
+                synced = await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
+                print(f"🔮 Synced {len(synced)} commands to guild {GUILD_ID} (instant visibility).")
+            else:
+                synced = await bot.tree.sync()  # Global sync (may take 1–60 mins)
+                print(f"🔮 Synced {len(synced)} commands globally (visible after propagation).")
+
+            print(f"📝 Synced commands: {[cmd.name for cmd in bot.tree.get_commands()]}")
+        except Exception as e:
+            print(f"⚠️ Command sync error: {type(e).__name__}: {e}")
+            import traceback
+            traceback.print_exc()
     else:
-        print("🔄 Bot reconnected – Commands already synced (no re-sync).")
+        print("🔄 Bot reconnected – commands already synced (no re-sync).")
+
+    # --- Ready confirmation ---
+    print("✨ NexusVerse is fully ready! Try using /help in your Discord server.")
+
 
 @bot.event
 async def on_command_error(ctx, error):
-    """Handle errors for prefix commands (e.g., !help)."""
+    """Handle errors for prefix commands (like !help)."""
     if isinstance(error, commands.CommandNotFound):
         return  # Ignore unknown prefix commands
     print(f"❌ Prefix command error in {ctx.guild or 'DM'}: {type(error).__name__}: {error}")
-    if ctx.guild:  # Send error to user if in server
-        await ctx.send("❌ An error occurred with that command. Check console for details.", delete_after=5)
+    if ctx.guild:
+        await ctx.send(
+            "❌ An error occurred with that command. Check console for details.",
+            delete_after=5,
+        )
+
 
 @bot.event
 async def on_app_command_error(interaction: discord.Interaction, error):
-    """Handle errors for slash commands (e.g., /profile DB fail)."""
-    print(f"❌ Slash command error in {interaction.guild or 'DM'} for /{(interaction.data.get('name', 'unknown'))}: {type(error).__name__}: {error}")
+    """Handle errors for slash commands (like /profile)."""
+    print(
+        f"❌ Slash command error in {interaction.guild or 'DM'} for /{interaction.data.get('name', 'unknown')}: "
+        f"{type(error).__name__}: {error}"
+    )
     try:
         if not interaction.response.is_done():
-            await interaction.response.send_message("❌ An error occurred. Try again or contact owner!", ephemeral=True)
+            await interaction.response.send_message(
+                "❌ An error occurred. Try again or contact the bot owner!", ephemeral=True
+            )
     except:
-        pass  # If response already sent, ignore
+        pass
 
-# Run the Bot (Final block – if __name__ == '__main__')
-if __name__ == '__main__':
-    print("🚀 Launching bot.run() with token...")
+
+# --- Run the bot ---
+if __name__ == "__main__":
+    print("🚀 Launching NexusVerse bot...")
     try:
         bot.run(DISCORD_TOKEN)
     except discord.LoginFailure:
         print("❌ Login failed: Invalid or expired DISCORD_TOKEN.")
-        print("Fix: Developer Portal > Your App > Bot > Regenerate Secret > Copy full token (starts with 'MTEx...').")
-        print("Update: export DISCORD_TOKEN='new_token' (no extra spaces/quotes).")
+        print("Fix: Developer Portal → Bot → Regenerate Token → Copy new token.")
     except discord.HTTPException as e:
-        print(f"❌ HTTP/Discord API error (e.g., rate limit, bot not in server, or permissions): {e}")
-        print("Fix: Invite bot again (OAuth2: bot + applications.commands scopes). Check guilds in on_ready.")
+        print(f"❌ HTTP/Discord API error: {e}")
+        print("Possible causes: rate limit, bot not in server, or missing permissions.")
     except discord.Forbidden as e:
-        print(f"❌ Permissions error (bot lacks access): {e}")
-        print("Fix: Re-invite bot with full permissions (Send Messages, Embed Links, Use Slash Commands).")
+        print(f"❌ Permissions error: {e}")
+        print("Fix: Re-invite bot with full permissions (Send Messages, Use Slash Commands).")
     except Exception as e:
         print(f"❌ Unexpected startup error: {type(e).__name__}: {e}")
-        print("Full traceback below – Check syntax, imports, or line numbers:")
         import traceback
-        traceback.print_exc()  # Prints full error stack for debug
+        traceback.print_exc()
     finally:
-        print("🏁 Bot process ended. (Restart with python nexusverse.py)")
-@bot.event
-async def on_ready():
-    """Bot startup event: Init DB, sync commands, print status."""
-    print(f'🚀 Initializing NexusVerse...')  # Debug start
-    await init_db()  # Create/setup DB tables (users, guilds, etc.)
-    print(f'✅ DB initialized: {DB_FILE} ready with users/guilds/bans tables.')
-    
-    # Bot status print
-    print(f'🌌 NexusVerse Online! Owner: <@{OWNER_ID}> | Guilds: {len(bot.guilds)}')
-    if bot.guilds:
-        print(f'📋 Joined guilds: {[g.name for g in bot.guilds]}')  # List for debug
-    
-    # Sync slash commands (auto for @bot.tree.command decorators)
-    if not hasattr(bot, 'synced'):  # One-time sync (avoids duplicates on reconnect)
-        bot.synced = True
-        try:
-            # Optional: Guild sync for instant testing (set your server ID; None for global)
-            GUILD_ID = None  # e.g., 123456789012345678 – Get from Discord (Right-click server > Copy ID)
-            if GUILD_ID:
-                synced = await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
-                print(f'🔮 Synced {len(synced)} commands to guild {GUILD_ID} (instant visibility).')
-            else:
-                synced = await bot.tree.sync(guild=None)  # Global sync (1-60min delay)
-                print(f'🔮 Synced {len(synced)} commands globally (wait 1-60min for / commands).')
-            
-            # List synced commands for debug
-            print(f'📝 Synced commands: {[cmd.name for cmd in bot.tree.get_commands()]}')
-        except Exception as e:
-            print(f'⚠️ Sync Error: {e} – Check: app_commands import, no duplicate decorators, bot permissions (applications.commands scope).')
-            import traceback
-            traceback.print_exc()  # Full error lines
-    else:
-        print("🔄 Bot reconnected – Commands already synced (no re-sync).")
-    
-    # Optional: Start looped tasks (e.g., global events check every hour)
-    # example_task.start()  # Uncomment if you add @tasks.loop later
-    
-    print("🔮 NexusVerse fully ready! Test with /help in Discord.")  # Final confirmation
+        print("🏁 Bot process ended. Restart with: python nexusverse.py")
