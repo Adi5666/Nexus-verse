@@ -5,6 +5,7 @@ import json
 from datetime import datetime, timedelta
 import traceback
 import random  # For pull/catch simulation
+from functools import wraps
 
 app = Flask(__name__)
 app.secret_key = os.getenv('DASHBOARD_SECRET', 'nexusverse12')  # Change in env for security
@@ -191,6 +192,7 @@ init_dashboard_db()
 
 # Permission Decorator
 def login_required(f):
+    @wraps(f)
     def decorated(*args, **kwargs):
         if 'logged_in' not in session:
             return redirect(url_for('login'))
