@@ -123,7 +123,7 @@ def get_guild_data_sync(guild_id: int) -> dict:
         if row:
             keys = ['guild_id', 'is_official', 'spawn_multiplier', 'admins']
             data = dict(zip(keys, row))
-                        data['admins'] = json.loads(data['admins'] or '[]')
+            data['admins'] = json.loads(data['admins'] or '[]')
             return data
         return {'guild_id': guild_id, 'is_official': False, 'spawn_multiplier': 1.0, 'admins': []}
     except Exception as e:
