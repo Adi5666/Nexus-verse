@@ -425,7 +425,7 @@ def public_dashboard():
                 .neon-glow { box-shadow: 0 0 20px #00D4FF; }
                 .btn-neon { background: linear-gradient(45deg, #00D4FF, #8B00FF); color: white; box-shadow: 0 0 15px rgba(0,212,255,0.5); }
                 .badge { animation: pulse 1s infinite; }
-                @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+                @keyframes pulse {{ 0% {{ transform: scale(1); }} 50% {{ transform: scale(1.05); }} 100% {{ transform: scale(1); }} }}
             </style>
         </head>
         <body>
