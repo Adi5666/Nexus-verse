@@ -257,7 +257,7 @@ def assign_role_sync(user_id: int, level: str, assigned_by: int, guild_ids: list
 def remove_role_sync(user_id: int, level: str, removed_by: int):
     try:
         init_dashboard_db()
-               conn = sqlite3.connect(DB_FILE)
+        conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
         cursor.execute('DELETE FROM admins WHERE user_id = ? AND level = ?', (user_id, level))
         conn.commit()
